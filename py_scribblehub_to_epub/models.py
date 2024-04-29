@@ -1,37 +1,50 @@
 import abc
+from typing import Iterable, Self, Union
 import arrow
-from typing import Iterable, Self
+import click
 
 
 class BookMetadata(abc.ABC):
-    sourceUrl: str
-    slug: str
-    title: str
-    coverUrl: str
-    date: arrow.Arrow
-    description: str
-    author: str
-    publisher: str
-    description: str
-
-
-class Chapter(abc.ABC):
-    sourceUrl: str
-    index: int
-    title: str
-    text: str
+    sourceUrl: str = None
+    slug: str = None
+    title: str = None
+    coverUrl: str = None
+    date: arrow.Arrow = None
+    description: str = None
+    author: str = None
+    publisher: str = None
+    identifier: str = None
+    genres: Iterable[str] = None
+    tags: Iterable[str] = None
+    rights: str = None
+    isLoaded: bool = False
 
     @classmethod
     def load(cls) -> Self:
         ...
 
 
+class Chapter(abc.ABC):
+    sourceUrl: str = None
+    index: int = None
+    title: str = None
+    text: str = None
+    date: arrow.Arrow = None
+    assets: dict[str, bytes] = None
+    isLoaded: bool = False
+
+    def load(self) -> Self:
+        ...
+
+
 class Book(abc.ABC):
-    sourceUrl: str
-    metadata: BookMetadata
-    coverImage: bytes
-    chapters: Iterable[Chapter]
-    styles: str
+    sourceUrl: str = None
+    metadata: BookMetadata = None
+    coverImage: bytes = None
+    chapters: Iterable[Chapter] = None
+    styles: str = None
+    filename: str = None
+    assets: dict[str, dict[str, Union[str, bytes]]] = None
     isLoaded: bool = False
 
     @classmethod
@@ -39,4 +52,7 @@ class Book(abc.ABC):
         ...
 
     def load(self) -> None:
+        ...
+
+    def save(self, out_path: click.Path) -> None:
         ...
