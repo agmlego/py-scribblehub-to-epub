@@ -19,9 +19,7 @@ class BookMetadata(abc.ABC):
     tags: Iterable[str] = None
     rights: str = None
     is_loaded: bool = False
-
-    @classmethod
-    def load(cls) -> Self: ...
+    def load(self) -> None:
 
 
 class Chapter(abc.ABC):
