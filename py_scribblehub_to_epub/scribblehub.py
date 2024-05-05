@@ -83,6 +83,9 @@ class ScribbleHubChapter(models.Chapter):
         self.assets = {}
 
     def load(self) -> Self:
+        # ditch out if parent did not load index and date, since those come from the series TOC not the chapter page metadata
+        assert self.date is not None
+        assert self.index is not None
         resp = session.get(self.source_url, headers=headers)
         if not resp.ok:
             resp.raise_for_status()
@@ -109,6 +112,8 @@ class ScribbleHubChapter(models.Chapter):
                     "uid": fname,
                 }
                 asset["src"] = relpath
+
+        self.is_loaded = True
         self.fix_footnotes()
 
     def fix_footnotes(self):
