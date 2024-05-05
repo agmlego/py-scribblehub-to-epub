@@ -1,3 +1,10 @@
+"""
+Scribble Hub provider to generate ePubs
+"""
+
+# pylint: disable=too-few-public-methods
+# pylint: disable=too-many-instance-attributes
+
 import mimetypes
 import os.path
 import re
@@ -5,7 +12,7 @@ import uuid
 from codecs import encode
 from hashlib import sha1
 from importlib.resources import files
-from typing import Self
+from typing import Self, Union
 
 import arrow
 import click
@@ -30,7 +37,59 @@ DATE_MATCH = re.compile("Last updated: .*")
 
 
 class ScribbleHubBookMetadata(models.BookMetadata):
+    """
+    Implementation of book metadata for Scribble Hub works
+    """
+
+    source_url: str = None
+    """
+    Canonical series URL for the work,
+        `https://www.scribblehub.com/series/{{story_id}}/{{slug}}/`
+    """
+
+    slug: str = None
+    """Short text part of the URL for this book, broken out of the series URL `story_id`"""
+
+    title: str = None
+    """Book title, loaded from `og:title`"""
+
+    cover_url: str = None
+    """URL for the cover image, loaded from `og:image`"""
+
+    date: arrow.Arrow = None
+    """Last updated date from series page, parsed from `<span title="Last updated: .*">`"""
+
+    description: str = None
+    """Description of the book, loaded from `wi_fic_desc`"""
+
+    author: str = None
+    """Book author(s), loaded from `twitter:creator`"""
+
+    publisher: str = "Scribble Hub"
+    """Scribble Hub by default, loaded from `og:site_name`"""
+
+    identifier: str = None
+    """Unique identifier for this book, broken out of the series URL `slug`"""
+
+    genres: list[str] = None
+    """Series of tags relating to the book genre, loaded from `fic_genre`"""
+
+    tags: list[str] = None
+    """Series of tags describing the book content, loaded from `stag`"""
+
+    rights: str = None
+    """
+    Rights reservation for copyright purpose,
+        parsed out of `<div class="sb_content copyright">...<img class="copy*">`
+    """
+
     def __init__(self, url: str) -> None:
+        """
+        Create an initial metadata object *without* loading the data
+
+        Args:
+            url (str): Either a chapter or series URL
+        """
         super().__init__()
         self.source_url = url
         if not STORY_MATCH.search(self.source_url):
@@ -49,6 +108,9 @@ class ScribbleHubBookMetadata(models.BookMetadata):
         self.identifier = url_parts["story_id"]
 
     def load(self) -> None:
+        """
+        Load the metadata for this object
+        """
         html = session.get(self.source_url, headers=headers)
         if not html.ok:
             html.raise_for_status()
@@ -77,13 +139,67 @@ class ScribbleHubBookMetadata(models.BookMetadata):
 
 
 class ScribbleHubChapter(models.Chapter):
+    """
+    Implementation of a book chapter for Scribble Hub works
+    """
+
+    source_url: str = None
+    """
+    URL for this chapter,
+        `https://www.scribblehub.com/read/{{story_id}}-{{slug}}/chapter/{{chapter_id}}/`
+    """
+
+    index: int = None
+    """
+    Unique identifier for this chapter,
+        loaded in parent from series TOC `<li class="toc_w" order="{{index}}">`
+    """
+
+    title: str = None
+    """Chapter title, loaded from `chapter-title`"""
+
+    text: str = None
+    """HTML content of chapter, loaded from `chp_raw`"""
+
+    date: arrow.Arrow = None
+    """
+    Publication date for the chapter,
+        loaded in parent from series TOC `<li class="toc_w" title="{{date}}">`
+    """
+
+    assets: dict[str, bytes] = None
+    """
+    Any image assets to embed into the chapter, loaded from `#chp_contents img[src]`
+
+    Each asset is a dict keyed to the asset URL with keys:
+    - `content`: the `bytes` content of the image
+    - `relpath`: "static/{fname}{ext}"
+        - `fname`: a SHA-1 hash of the URL
+        - `ext`: a mimetypes guessed extension
+    - `mimetype`: mimetype of the asset
+    - `uid`: `fname`
+    """
+
     def __init__(self, url: str):
+        """
+        Create an initial chapter object *without* loading the data
+
+        Args:
+            url (str): A chapter URL
+        """
         super().__init__()
         self.source_url = url
         self.assets = {}
 
     def load(self) -> Self:
-        # ditch out if parent did not load index and date, since those come from the series TOC not the chapter page metadata
+        """
+        Load the metadata for this object
+
+        Returns:
+            Self: This object containing all loaded data
+        """
+        # ditch out if parent did not load index and date,
+        # since those come from the series TOC not the chapter page metadata
         assert self.date is not None
         assert self.index is not None
         resp = session.get(self.source_url, headers=headers)
@@ -117,6 +233,9 @@ class ScribbleHubChapter(models.Chapter):
         self.fix_footnotes()
 
     def fix_footnotes(self):
+        """
+        Iterate through any footnotes and refactor them to ePub format
+        """
         if not self.is_loaded:
             return
         soup = BeautifulSoup(self.text)
@@ -153,21 +272,69 @@ class ScribbleHubChapter(models.Chapter):
 
 
 class ScribbleHubBook(models.Book):
-    metadata: ScribbleHubBookMetadata
+    """
+    Implementation of a book for Scribble Hub works
+    """
+
+    source_url: str = None
+    """URL from which this book was fetched"""
+
+    metadata: ScribbleHubBookMetadata = None
+    """Metadata for the book"""
+
+    cover_image: bytes = None
+    """The image fetched from `self.metadata.cover_url`"""
+
     chapters: list[ScribbleHubChapter] = []
+    """Series of chapters in the book"""
+
     styles = (
         files("py_scribblehub_to_epub.assets")
         .joinpath("scribblehub.css")
         .read_text(encoding="utf-8")
     )
+    """Combined CSS stylesheet for the ePub"""
+
+    filename: str = None
+    """Filename to save the book, composed of `{{metadata.author}} - {{metadata.title}}.epub`"""
+
+    assets: dict[str, dict[str, Union[str, bytes]]] = None
+    """
+    Combined set of image assets from all chapters to embed into the ePub
+    
+    Each asset is a dict keyed to the asset URL with keys:
+    - `content`: the `bytes` content of the image
+    - `relpath`: "static/{fname}{ext}"
+        - `fname`: a SHA-1 hash of the URL
+        - `ext`: a mimetypes guessed extension
+    - `mimetype`: mimetype of the asset
+    - `uid`: `fname`
+    """
 
     @classmethod
     def can_handle_url(cls, url: str) -> bool:
+        """
+        Whether this class can handle the given URL. This class can handle the following:
+        * Series: `https://www.scribblehub.com/series/{{story_id}}/{{slug}}/`
+        * Chapter: `https://www.scribblehub.com/read/{{story_id}}-{{slug}}/chapter/{{chapter_id}}/`
+
+        Args:
+            url (str): URL to check
+
+        Returns:
+            bool: Whether this class can handle the URL
+        """
         return (
             CHAPTER_MATCH.search(url) is not None or STORY_MATCH.search(url) is not None
         )
 
     def __init__(self, url: str) -> None:
+        """
+        Create an initial book object *without* loading the data
+
+        Args:
+            url (str): Either a chapter or series URL
+        """
         super().__init__()
         self.metadata = ScribbleHubBookMetadata(url)
         self.source_url = url
@@ -175,6 +342,10 @@ class ScribbleHubBook(models.Book):
         self.assets = {}
 
     def load(self) -> None:
+        """
+        Load the metadata for this object
+        """
+
         # fill out the metadata first from the series page
         self.metadata.load()
         self.filename = f"{self.metadata.author} - {self.metadata.title}.epub"
@@ -189,6 +360,13 @@ class ScribbleHubBook(models.Book):
         self.get_chapters()
 
     def save(self, out_path: click.Path):
+        """
+        Save this book as an ePub to disk
+
+        Args:
+            out_path (click.Path): Directory to save the book
+        """
+
         book = epub.EpubBook()
 
         # set up metadata
@@ -271,6 +449,9 @@ class ScribbleHubBook(models.Book):
         epub.write_epub(os.path.join(out_path, self.filename), book, {})
 
     def get_chapters(self) -> None:
+        """
+        Fetch the chapters for the work, based on the TOC API
+        """
         chapter_resp = session.post(
             f"{self.metadata.source_url}/wp-admin/admin-ajax.php",
             {
