@@ -1,14 +1,15 @@
 import abc
 from typing import Iterable, Self, Union
+
 import arrow
 import click
 
 
 class BookMetadata(abc.ABC):
-    sourceUrl: str = None
+    source_url: str = None
     slug: str = None
     title: str = None
-    coverUrl: str = None
+    cover_url: str = None
     date: arrow.Arrow = None
     description: str = None
     author: str = None
@@ -17,42 +18,37 @@ class BookMetadata(abc.ABC):
     genres: Iterable[str] = None
     tags: Iterable[str] = None
     rights: str = None
-    isLoaded: bool = False
+    is_loaded: bool = False
 
     @classmethod
-    def load(cls) -> Self:
-        ...
+    def load(cls) -> Self: ...
 
 
 class Chapter(abc.ABC):
-    sourceUrl: str = None
+    source_url: str = None
     index: int = None
     title: str = None
     text: str = None
     date: arrow.Arrow = None
     assets: dict[str, bytes] = None
-    isLoaded: bool = False
+    is_loaded: bool = False
 
-    def load(self) -> Self:
-        ...
+    def load(self) -> Self: ...
 
 
 class Book(abc.ABC):
-    sourceUrl: str = None
+    source_url: str = None
     metadata: BookMetadata = None
-    coverImage: bytes = None
+    cover_image: bytes = None
     chapters: Iterable[Chapter] = None
     styles: str = None
     filename: str = None
     assets: dict[str, dict[str, Union[str, bytes]]] = None
-    isLoaded: bool = False
+    is_loaded: bool = False
 
     @classmethod
-    def canHandleUrl(cls, url: str) -> bool:
-        ...
+    def can_handle_url(cls, url: str) -> bool: ...
 
-    def load(self) -> None:
-        ...
+    def load(self) -> None: ...
 
-    def save(self, out_path: click.Path) -> None:
-        ...
+    def save(self, out_path: click.Path) -> None: ...
