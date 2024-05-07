@@ -10,6 +10,8 @@
         "noteanchor",
         "noteref",
         "pagenum",
+        "pyrate",
+        "ratelimiter",
         "scribblehub",
         "spdiv"
     ]

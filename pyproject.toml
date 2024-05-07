@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "py_scribblehub_to_epub"
-version = "0.2.0"
+version = "0.3.0"
 authors = [{ name = "Amelia Meyer", email = "agmlego@gmail.com" }]
 description = "Python project to make epub books from Scribblehub works"
 readme = "README.md"
@@ -23,6 +23,7 @@ dependencies = [
     'ftfy',
     'requests',
     'requests-cache',
+    'requests-ratelimiter',
     'rich',
 ]
 

@@ -19,29 +19,15 @@ from typing import Self, Union
 
 import arrow
 import ftfy
-from appdirs import AppDirs
 from bs4 import BeautifulSoup
 from ebooklib import epub
-from requests_cache import CachedSession
-from rich.logging import RichHandler
 
 from . import models
+from .http import session
 
-FORMAT = "%(message)s"
-logging.basicConfig(
-    level="DEBUG",
-    format=FORMAT,
-    datefmt="[%X]",
-    handlers=[RichHandler(rich_tracebacks=True)],
-)
-logging.getLogger("requests_cache").setLevel(logging.WARNING)
-logging.getLogger("urllib3").setLevel(logging.WARNING)
 log = logging.getLogger(__name__)
 
-dirs = AppDirs("py_scribblehub_to_epub", "agmlego")
-
 headers = {"User-Agent": "node"}
-session = CachedSession(dirs.user_cache_dir, backend="sqlite", cache_control=True)
 
 CHAPTER_MATCH = re.compile(
     r"(?P<url_root>.*)/read/(?P<story_id>\d*)-(?P<slug>.*?)/chapter/(?P<chapter_id>\d*)"
