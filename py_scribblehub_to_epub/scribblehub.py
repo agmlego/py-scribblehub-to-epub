@@ -172,6 +172,9 @@ class ScribbleHubChapter(models.Chapter):
     Implementation of a book chapter for Scribble Hub works
     """
 
+    parent: "ScribbleHubBook" = None
+    """Book owning this chapter"""
+
     source_url: str = None
     """
     URL for this chapter,
@@ -212,14 +215,16 @@ class ScribbleHubChapter(models.Chapter):
     - `uid`: `fname`
     """
 
-    def __init__(self, url: str):
+    def __init__(self, parent: "ScribbleHubBook", url: str):
         """
         Create an initial chapter object *without* loading the data
 
         Args:
+            parent (ScribbleHubBook): Book owning this chapter
             url (str): A chapter URL
         """
         super().__init__()
+        self.parent = parent
         self.source_url = url
         self.assets = {}
 
@@ -242,7 +247,7 @@ class ScribbleHubChapter(models.Chapter):
             log.debug(f'Found language {tag["lang"]}')
             self.languages.append(tag["lang"])
         self.title = soup.find(class_="chapter-title").text
-        log.info(f"Chapter Title: {self.title}")
+        log.info(f"{self.parent.metadata.title} Chapter {self.index}: {self.title}")
 
         if not mimetypes.inited:
             mimetypes.init(None)
@@ -480,17 +485,7 @@ class ScribbleHubBook(models.Book):
         book.add_item(epub.EpubNcx())
         book.add_item(epub.EpubNav())
 
-        # set up styles
-        nav_css = epub.EpubItem(
-            uid="style_nav",
-            file_name="style/nav.css",
-            media_type="text/css",
-            content=self.styles,
-        )
-        book.add_item(nav_css)
-
-        # create spin, add cover page as first page
-        book.spine = ["cover", "nav"]
+        # create spine, add cover page as first page
         book.spine.extend(toc_chap_list)
 
         # create epub file

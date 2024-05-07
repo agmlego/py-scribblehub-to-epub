@@ -69,6 +69,9 @@ class Chapter(abc.ABC):
     Representation of a book chapter
     """
 
+    parent: "Book" = None
+    """Book owning this chapter"""
+
     source_url: str = None
     """URL for this chapter"""
 

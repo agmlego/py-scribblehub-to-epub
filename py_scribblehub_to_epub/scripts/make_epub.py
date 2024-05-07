@@ -19,7 +19,6 @@ logging.basicConfig(
     datefmt="[%X]",
     handlers=[RichHandler(rich_tracebacks=True)],
 )
-logging.getLogger("requests_cache").setLevel(logging.WARNING)
 log = logging.getLogger(__name__)
 
 
