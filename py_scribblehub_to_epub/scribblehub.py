@@ -137,7 +137,7 @@ class ScribbleHubBookMetadata(models.BookMetadata):
         html = session.get(self.source_url, headers=headers)
         if not html.ok:
             html.raise_for_status()
-        soup = BeautifulSoup(html.text)
+        soup = BeautifulSoup(html.text, "lxml")
         for tag in soup.find_all(lambda x: x.has_attr("lang")):
             log.debug(f'Found language {tag["lang"]}')
             self.languages.append(tag["lang"])
@@ -237,7 +237,7 @@ class ScribbleHubChapter(models.Chapter):
         resp = session.get(self.source_url, headers=headers)
         if not resp.ok:
             resp.raise_for_status()
-        soup = BeautifulSoup(resp.text)
+        soup = BeautifulSoup(resp.text, "lxml")
         for tag in soup.find_all(lambda x: x.has_attr("lang")):
             log.debug(f'Found language {tag["lang"]}')
             self.languages.append(tag["lang"])
@@ -277,7 +277,7 @@ class ScribbleHubChapter(models.Chapter):
         """
         if not self.is_loaded:
             return
-        soup = BeautifulSoup(self.text)
+        soup = BeautifulSoup(self.text, "lxml")
         footnotes = []
         for tag in soup.select(".modern-footnotes-footnote"):
             mfn = tag["data-mfn"].text
@@ -511,7 +511,7 @@ class ScribbleHubBook(models.Book):
         )
         if not chapter_resp.ok:
             chapter_resp.raise_for_status()
-        chapter_soup = BeautifulSoup(chapter_resp.text)
+        chapter_soup = BeautifulSoup(chapter_resp.text, "lxml")
         for chapter_tag in chapter_soup.find_all(class_="toc_w"):
             chapter = ScribbleHubChapter(chapter_tag.a["href"])
             chapter.index = int(chapter_tag["order"])
