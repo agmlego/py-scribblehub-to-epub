@@ -15,7 +15,6 @@ from importlib.resources import files
 from typing import Self, Union
 
 import arrow
-import click
 import ftfy
 from appdirs import AppDirs
 from bs4 import BeautifulSoup
@@ -374,12 +373,12 @@ class ScribbleHubBook(models.Book):
         # fill out the chapters
         self.get_chapters()
 
-    def save(self, out_path: click.Path):
+    def save(self, out_path: str):
         """
         Save this book as an ePub to disk
 
         Args:
-            out_path (click.Path): Directory to save the book
+            out_path (str): Directory to save the book
         """
 
         book = epub.EpubBook()

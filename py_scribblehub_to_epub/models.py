@@ -9,7 +9,6 @@ import abc
 from typing import Iterable, Self, Union
 
 import arrow
-import click
 
 
 class BookMetadata(abc.ABC):
@@ -150,10 +149,10 @@ class Book(abc.ABC):
         Load the metadata for this object
         """
 
-    def save(self, out_path: click.Path) -> None:
+    def save(self, out_path: str) -> None:
         """
         Save this book as an ePub to disk
 
         Args:
-            out_path (click.Path): Directory to save the book
+            out_path (str): Directory to save the book
         """
