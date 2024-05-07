@@ -56,8 +56,7 @@ span[property="genre"]:last-child {
 .wi_news,
 .sp-wrap,
 .wi_authornotes {
-  border: 2px solid black;
-  padding: 1em;
+  display: block;
 }
 
 .wi_novel_title,
@@ -67,26 +66,6 @@ span[property="genre"]:last-child {
   margin-bottom: 10px;
   font-size: 1.3em;
   font-weight: bold;
-}
-
-.wi_authornotes::before {
-  font-family: sans-serif;
-  content: "\201C";
-  color: #001018;
-  font-size: 4em;
-  position: absolute;
-  left: 10px;
-  top: -10px;
-}
-
-.wi_authornotes::after {
-  font-family: sans-serif;
-  content: "\201D";
-  color: #001018;
-  font-size: 4em;
-  position: absolute;
-  bottom: -45px;
-  right: 10px;
 }
 
 .wi_authornotes {
