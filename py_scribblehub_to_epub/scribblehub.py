@@ -262,20 +262,27 @@ class ScribbleHubChapter(models.Chapter):
                 log.debug(f'Found asset at {asset["src"]}')
                 asset_resp = session.get(asset["src"], headers=headers)
                 if not asset_resp.ok:
-                    asset_resp.raise_for_status()
+                    # just remove the asset from HTML if we have fetch issues
+                    log.warning(
+                        f'Issue fetching asset {asset["src"]} because "{asset_resp.status_code}: {asset_resp.reason}"'
+                    )
+                    asset.extract()
+                    continue
                 fname = sha1(encode(asset["src"], "utf-8")).hexdigest()
                 mimetype, _ = mimetypes.guess_type(asset["src"])
                 log.debug(f"Asset is {mimetype}")
                 ext = mimetypes.guess_extension(mimetype)
                 relpath = f"static/{fname}{ext}"
-                log.debug(f"Asset destination {relpath}")
                 self.assets[asset["src"]] = {
                     "content": asset_resp.content,
                     "relpath": relpath,
                     "mimetype": mimetype,
                     "uid": fname,
                 }
-                asset["src"] = relpath
+            else:
+                relpath = self.assets[asset["src"]]["relpath"]
+            log.debug(f"Updating asset to {relpath} from {asset['src']}")
+            asset["src"] = relpath
 
         self.text = ftfy.fix_text(soup.find(class_="chp_raw").prettify())
         self.is_loaded = True
