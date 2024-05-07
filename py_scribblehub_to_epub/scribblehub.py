@@ -510,14 +510,15 @@ class ScribbleHubBook(models.Book):
             toc_chap_list.append(c)
 
         # set up toc
-        book.toc = (
+        book.toc = [
             epub.Link("intro.xhtml", "Introduction", "intro"),
-            (epub.Section("Languages"), toc_chap_list),
-        )
+        ]
+        book.toc.extend(toc_chap_list)
         book.add_item(epub.EpubNcx())
         book.add_item(epub.EpubNav())
 
         # create spine, add cover page as first page
+        book.spine = ["cover", "intro", "nav"]
         book.spine.extend(toc_chap_list)
 
         # create epub file
