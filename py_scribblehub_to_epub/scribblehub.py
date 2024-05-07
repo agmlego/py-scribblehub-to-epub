@@ -62,8 +62,11 @@ class ScribbleHubBookMetadata(models.BookMetadata):
     date: arrow.Arrow = None
     """Last updated date from series page, parsed from `<span title="Last updated: .*">`"""
 
+    intro: str = None
+    """Description of the book with HTML markup, loaded from `wi_fic_desc`"""
+
     description: str = None
-    """Description of the book, loaded from `wi_fic_desc`"""
+    """Plaintext description of the book, loaded from `wi_fic_desc`"""
 
     author: str = None
     """Book author(s), loaded from `twitter:creator`"""
@@ -128,7 +131,9 @@ class ScribbleHubBookMetadata(models.BookMetadata):
         self.date = arrow.get(
             soup.find("span", title=DATE_MATCH)["title"][14:], "MMM D, YYYY hh:mm A"
         )
-        self.description = ftfy.fix_text(soup.find(class_="wi_fic_desc").text)
+        description = soup.find(class_="wi_fic_desc")
+        self.intro = ftfy.fix_text(description.prettify())
+        self.description = ftfy.fix_text(description.text)
         self.author = soup.find(attrs={"name": "twitter:creator"})["content"]
         self.publisher = soup.find(property="og:site_name")["content"]
         self.genres = [a.string for a in soup.find_all(class_="fic_genre")]
@@ -430,7 +435,7 @@ class ScribbleHubBook(models.Book):
         # add chapters
         toc_chap_list = []
         intro = epub.EpubHtml(
-            title="Intro", file_name="intro.xhtml", content=self.metadata.description
+            title="Intro", file_name="intro.xhtml", content=self.metadata.intro
         )
         book.add_item(intro)
         for chapter in self.chapters:
