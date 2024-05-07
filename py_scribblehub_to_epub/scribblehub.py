@@ -53,6 +53,9 @@ class ScribbleHubBookMetadata(models.BookMetadata):
     title: str = None
     """Book title, loaded from `og:title`"""
 
+    languages: list[str] = []
+    """Book language(s) as Dublin-core language codes, loaded from `lang="*"`"""
+
     cover_url: str = None
     """URL for the cover image, loaded from `og:image`"""
 
@@ -115,6 +118,8 @@ class ScribbleHubBookMetadata(models.BookMetadata):
         if not html.ok:
             html.raise_for_status()
         soup = BeautifulSoup(html.text)
+        for tag in soup.find_all(lambda x: x.has_attr("lang")):
+            self.languages.append(tag["lang"])
         url = soup.find(property="og:url")["content"]
         if self.source_url != url:
             print(f"Metadata URL mismatch!\n\t{self.source_url}\n\t{url}")
@@ -157,6 +162,9 @@ class ScribbleHubChapter(models.Chapter):
 
     title: str = None
     """Chapter title, loaded from `chapter-title`"""
+
+    languages: list[str] = []
+    """Any language(s) in the chapter  as Dublin-core language codes, loaded from `lang="*"`"""
 
     text: str = None
     """HTML content of chapter, loaded from `chp_raw`"""
@@ -206,6 +214,8 @@ class ScribbleHubChapter(models.Chapter):
         if not resp.ok:
             resp.raise_for_status()
         soup = BeautifulSoup(resp.text)
+        for tag in soup.find_all(lambda x: x.has_attr("lang")):
+            self.languages.append(tag["lang"])
         self.title = soup.find(class_="chapter-title").text
         self.text = ftfy.fix_text(soup.find(class_="chp_raw").prettify())
 
@@ -379,7 +389,6 @@ class ScribbleHubBook(models.Book):
             "DC", "subject", ",".join(self.metadata.genres), {"id": "genre"}
         )
         book.set_title(self.metadata.title)
-        # book.set_language(self.metadata.language)
 
         book.add_metadata("DC", "date", self.metadata.date.isoformat())
         book.add_author(self.metadata.author)
@@ -390,6 +399,15 @@ class ScribbleHubBook(models.Book):
             f"Copyright © {self.metadata.date.year} {self.metadata.author} {self.metadata.rights}",
         )
         book.add_metadata("DC", "description", self.metadata.description)
+
+        # set languages; assume the first one is the "main" language
+        main_lang = self.metadata.languages[0]
+        book.set_language(main_lang)
+        if len(self.metadata.languages) > 1:
+            langs = set(self.metadata.languages[1:])
+            langs.remove(main_lang)
+            for lang in langs:
+                book.add_metadata("DC", "language", lang)
 
         # add cover image
         if not mimetypes.inited:
@@ -470,6 +488,7 @@ class ScribbleHubBook(models.Book):
             chapter.title = chapter_tag.a.text
             chapter.date = arrow.get(chapter_tag.span["title"], "MMM D, YYYY hh:mm A")
             self.chapters.append(chapter)
+            self.metadata.languages.extend(chapter.languages)
 
         self.chapters.sort(key=lambda x: x.index)
         for chapter in self.chapters:

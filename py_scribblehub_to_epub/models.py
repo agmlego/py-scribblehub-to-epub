@@ -26,6 +26,9 @@ class BookMetadata(abc.ABC):
     title: str = None
     """Book title"""
 
+    languages: Iterable[str] = None
+    """Book language(s) as Dublin-core language codes"""
+
     cover_url: str = None
     """URL for the cover image"""
 
@@ -75,6 +78,9 @@ class Chapter(abc.ABC):
 
     title: str = None
     """Chapter title without number"""
+
+    languages: Iterable[str] = None
+    """Any language(s) in the chapter as Dublin-core language codes"""
 
     text: str = None
     """HTML content of chapter"""
