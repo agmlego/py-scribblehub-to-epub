@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "py_scribblehub_to_epub"
-version = "0.1.0"
+version = "0.2.0"
 authors = [{ name = "Amelia Meyer", email = "agmlego@gmail.com" }]
 description = "Python project to make epub books from Scribblehub works"
 readme = "README.md"

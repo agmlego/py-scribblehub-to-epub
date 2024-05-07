@@ -1,6 +1,8 @@
 # pylint: disable=logging-fstring-interpolation
 
 import logging
+import sys
+import tomllib
 from typing import Iterable, Union
 
 import click
@@ -29,11 +31,38 @@ log = logging.getLogger(__name__)
     "out_path",
     nargs=1,
     type=click.Path(exists=True, writable=True, dir_okay=True, file_okay=False),
+    required=False,
 )
-def cli(url: str, out_path: click.Path):
+@click.option(
+    "--config",
+    nargs=1,
+    type=click.Path(exists=True, dir_okay=False, file_okay=True),
+    help="A TOML config file to process",
+    default=None,
+)
+def cli(url: str, out_path: click.Path, config: click.Path):
     """
     Make an epub book from URL(s), outputting them in a directory structure rooted at OUT_PATH
     """
+    if config:
+        with open(config, "rb") as f:
+            config = tomllib.load(f)
+        if "output" in config and "path" in config["output"]:
+            out_path = config["output"]["path"]
+        elif out_path:
+            pass
+        else:
+            log.error(
+                "Config file must contain output.path or OUT_PATH must exist in args"
+            )
+            sys.exit(-200)
+        if "books" in config and "urls" in config["books"]:
+            url = config["books"]["urls"]
+        elif url:
+            pass
+        else:
+            log.error("Config file must contain books.urls or URL must exist in args")
+            sys.exit(-300)
     make_epub(url=url, out_path=out_path)
 
 
