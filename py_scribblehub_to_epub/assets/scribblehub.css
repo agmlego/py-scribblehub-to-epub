@@ -53,6 +53,12 @@ span[property="genre"]:last-child {
   content: "⚠";
 }
 
+.aligncenter {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+
 .wi_news,
 .sp-wrap,
 .wi_authornotes {
@@ -68,6 +74,7 @@ span[property="genre"]:last-child {
   font-weight: bold;
 }
 
+.wi_news,
 .wi_authornotes {
   padding: 15px 35px;
   border-radius: 5px;
