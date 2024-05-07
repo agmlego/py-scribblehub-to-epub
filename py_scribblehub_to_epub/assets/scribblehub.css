@@ -147,5 +147,6 @@ i.fa {
 }
 
 img:not([id="acc_ava_change profile"]) {
-  width: 100%;
+  max-width: 100%;
+  height: auto;
 }

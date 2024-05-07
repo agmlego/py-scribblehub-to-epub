@@ -4,7 +4,9 @@ Scribble Hub provider to generate ePubs
 
 # pylint: disable=too-few-public-methods
 # pylint: disable=too-many-instance-attributes
+# pylint: disable=logging-fstring-interpolation
 
+import logging
 import mimetypes
 import os.path
 import re
@@ -20,8 +22,19 @@ from appdirs import AppDirs
 from bs4 import BeautifulSoup
 from ebooklib import epub
 from requests_cache import CachedSession
+from rich.logging import RichHandler
 
 from . import models
+
+FORMAT = "%(message)s"
+logging.basicConfig(
+    level="DEBUG",
+    format=FORMAT,
+    datefmt="[%X]",
+    handlers=[RichHandler(rich_tracebacks=True)],
+)
+logging.getLogger("requests_cache").setLevel(logging.WARNING)
+log = logging.getLogger(__name__)
 
 dirs = AppDirs("py_scribblehub_to_epub", "agmlego")
 
@@ -108,9 +121,13 @@ class ScribbleHubBookMetadata(models.BookMetadata):
                     "",
                 )
             )
+            log.debug(
+                f"Fixing chapter URL to be series URL: {url} -> {self.source_url}"
+            )
         url_parts = STORY_MATCH.search(self.source_url)
         self.slug = url_parts["slug"]
         self.identifier = url_parts["story_id"]
+        log.debug(f"Metadata ready for {self.slug} ({self.identifier})")
 
     def load(self) -> None:
         """
@@ -121,11 +138,13 @@ class ScribbleHubBookMetadata(models.BookMetadata):
             html.raise_for_status()
         soup = BeautifulSoup(html.text)
         for tag in soup.find_all(lambda x: x.has_attr("lang")):
+            log.debug(f'Found language {tag["lang"]}')
             self.languages.append(tag["lang"])
         url = soup.find(property="og:url")["content"]
         if self.source_url != url:
-            print(f"Metadata URL mismatch!\n\t{self.source_url}\n\t{url}")
+            log.warning(f"Metadata URL mismatch!\n\t{self.source_url}\n\t{url}")
         self.title = soup.find(property="og:title")["content"]
+        log.info(f"Book Title: {self.title}")
         self.cover_url = soup.find(property="og:image")["content"] or ""
         self.date = arrow.get(
             soup.find("span", title=DATE_MATCH)["title"][14:], "MMM D, YYYY hh:mm A"
@@ -219,22 +238,26 @@ class ScribbleHubChapter(models.Chapter):
             resp.raise_for_status()
         soup = BeautifulSoup(resp.text)
         for tag in soup.find_all(lambda x: x.has_attr("lang")):
+            log.debug(f'Found language {tag["lang"]}')
             self.languages.append(tag["lang"])
         self.title = soup.find(class_="chapter-title").text
-        self.text = ftfy.fix_text(soup.find(class_="chp_raw").prettify())
+        log.info(f"Chapter Title: {self.title}")
 
         if not mimetypes.inited:
             mimetypes.init(None)
 
         for asset in soup.select("#chp_contents img[src]"):
             if asset["src"] not in self.assets:
+                log.debug(f'Found asset at {asset["src"]}')
                 asset_resp = session.get(asset["src"], headers=headers)
                 if not asset_resp.ok:
                     asset_resp.raise_for_status()
                 fname = sha1(encode(asset["src"], "utf-8")).hexdigest()
                 mimetype, _ = mimetypes.guess_type(asset["src"])
+                log.debug(f"Asset is {mimetype}")
                 ext = mimetypes.guess_extension(mimetype)
                 relpath = f"static/{fname}{ext}"
+                log.debug(f"Asset destination {relpath}")
                 self.assets[asset["src"]] = {
                     "content": asset_resp.content,
                     "relpath": relpath,
@@ -243,6 +266,7 @@ class ScribbleHubChapter(models.Chapter):
                 }
                 asset["src"] = relpath
 
+        self.text = ftfy.fix_text(soup.find(class_="chp_raw").prettify())
         self.is_loaded = True
         self.fix_footnotes()
 
@@ -256,6 +280,7 @@ class ScribbleHubChapter(models.Chapter):
         footnotes = []
         for tag in soup.select(".modern-footnotes-footnote"):
             mfn = tag["data-mfn"].text
+            log.debug(f"Found footnote {mfn}")
             anchor = tag.find_all("a")[-1]
             content_tag_element = soup.select(
                 f".modern-footnotes-footnote__note[data-mfn={mfn}]"
@@ -434,7 +459,7 @@ class ScribbleHubBook(models.Book):
         # add chapters
         toc_chap_list = []
         intro = epub.EpubHtml(
-            title="Intro", file_name="intro.xhtml", content=self.metadata.intro
+            title="Introduction", file_name="intro.xhtml", content=self.metadata.intro
         )
         book.add_item(intro)
         for chapter in self.chapters:
