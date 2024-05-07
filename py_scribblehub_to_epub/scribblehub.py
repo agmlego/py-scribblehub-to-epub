@@ -468,6 +468,15 @@ class ScribbleHubBook(models.Book):
         ext = mimetypes.guess_extension(mimetype)
         book.set_cover(f"cover{ext}", self.cover_image)
 
+        # set up styles
+        nav_css = epub.EpubItem(
+            uid="style_nav",
+            file_name="style/nav.css",
+            media_type="text/css",
+            content=self.styles,
+        )
+        book.add_item(nav_css)
+
         # add other assets
         for _, asset in self.assets.items():
             book.add_item(
@@ -484,6 +493,7 @@ class ScribbleHubBook(models.Book):
         intro = epub.EpubHtml(
             title="Introduction", file_name="intro.xhtml", content=self.metadata.intro
         )
+        intro.add_item(nav_css)
         book.add_item(intro)
         for chapter in self.chapters:
             c = epub.EpubHtml(
@@ -491,6 +501,7 @@ class ScribbleHubBook(models.Book):
                 file_name=f"chapter{chapter.index}.xhtml",
                 content=chapter.text,
             )
+            c.add_item(nav_css)
             book.add_item(c)
             toc_chap_list.append(c)
 
