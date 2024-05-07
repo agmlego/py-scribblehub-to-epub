@@ -7,6 +7,7 @@ Scribble Hub provider to generate ePubs
 # pylint: disable=logging-fstring-interpolation
 
 import logging
+import math
 import mimetypes
 import os.path
 import re
@@ -102,6 +103,9 @@ class ScribbleHubBookMetadata(models.BookMetadata):
         parsed out of `<div class="sb_content copyright">...<img class="copy*">`
     """
 
+    chapters: int = 0
+    """Number of chapters, loaded from `cnt_toc`"""
+
     def __init__(self, url: str) -> None:
         """
         Create an initial metadata object *without* loading the data
@@ -157,6 +161,7 @@ class ScribbleHubBookMetadata(models.BookMetadata):
         self.publisher = soup.find(property="og:site_name")["content"]
         self.genres = [a.string for a in soup.find_all(class_="fic_genre")]
         self.tags = [a.string for a in soup.find_all(class_="stag")]
+        self.chapters = int(soup.find(class_="cnt_toc").text)
 
         imgs = soup.find(class_="sb_content copyright").find_all("img")
         self.rights = ""
@@ -385,11 +390,14 @@ class ScribbleHubBook(models.Book):
         self.source_url = url
         self.cover_image = None
         self.assets = {}
+        self.chapters = []
+        log.debug(f"Book ready for {self.source_url}")
 
     def load(self) -> None:
         """
         Load the metadata for this object
         """
+        log.debug(f"Loading book for {self.source_url}")
 
         # fill out the metadata first from the series page
         self.metadata.load()
@@ -411,6 +419,8 @@ class ScribbleHubBook(models.Book):
         Args:
             out_path (str): Directory to save the book
         """
+
+        log.debug(f"Saving book for {self.metadata.title}")
 
         book = epub.EpubBook()
 
@@ -495,25 +505,33 @@ class ScribbleHubBook(models.Book):
         """
         Fetch the chapters for the work, based on the TOC API
         """
-        chapter_resp = session.post(
-            f"{self.metadata.source_url}/wp-admin/admin-ajax.php",
-            {
-                "action": "wi_getreleases_pagination",
-                "pagenum": -1,
-                "mypostid": self.metadata.identifier,
-            },
-            headers=headers,
+        self.chapters = []
+        page_count = math.ceil(self.metadata.chapters / 15)
+        log.debug(
+            f"Expecting {self.metadata.chapters} chapters, page_count={page_count}"
         )
-        if not chapter_resp.ok:
-            chapter_resp.raise_for_status()
-        chapter_soup = BeautifulSoup(chapter_resp.text, "lxml")
-        for chapter_tag in chapter_soup.find_all(class_="toc_w"):
-            chapter = ScribbleHubChapter(chapter_tag.a["href"])
-            chapter.index = int(chapter_tag["order"])
-            chapter.title = chapter_tag.a.text
-            chapter.date = arrow.get(chapter_tag.span["title"], "MMM D, YYYY hh:mm A")
-            self.chapters.append(chapter)
-            self.metadata.languages.extend(chapter.languages)
+        for page in range(1, page_count + 1):
+            chapter_resp = session.post(
+                "https://www.scribblehub.com/wp-admin/admin-ajax.php",
+                {
+                    "action": "wi_getreleases_pagination",
+                    "pagenum": page,
+                    "mypostid": self.metadata.identifier,
+                },
+                headers=headers,
+            )
+            if not chapter_resp.ok:
+                chapter_resp.raise_for_status()
+            chapter_soup = BeautifulSoup(chapter_resp.text, "lxml")
+            for chapter_tag in chapter_soup.find_all(class_="toc_w"):
+                chapter = ScribbleHubChapter(self, chapter_tag.a["href"])
+                chapter.index = int(chapter_tag["order"])
+                chapter.title = chapter_tag.a.text
+                chapter.date = arrow.get(
+                    chapter_tag.span["title"], "MMM D, YYYY hh:mm A"
+                )
+                self.chapters.append(chapter)
+                self.metadata.languages.extend(chapter.languages)
 
         self.chapters.sort(key=lambda x: x.index)
         for chapter in self.chapters:
