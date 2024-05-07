@@ -284,7 +284,11 @@ class ScribbleHubChapter(models.Chapter):
             log.debug(f"Updating asset to {relpath} from {asset['src']}")
             asset["src"] = relpath
 
-        self.text = ftfy.fix_text(soup.find(class_="chp_raw").prettify())
+        header_tag = soup.new_tag("h2")
+        header_tag.string = self.title
+        chap_text = soup.find(class_="chp_raw").extract()
+        chap_text.insert(0, header_tag)
+        self.text = ftfy.fix_text(chap_text.prettify())
         self.is_loaded = True
         self.fix_footnotes()
 
