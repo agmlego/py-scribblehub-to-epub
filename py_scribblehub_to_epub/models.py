@@ -6,112 +6,113 @@ Base classes for book model
 # pylint: disable=too-few-public-methods
 
 import abc
-from typing import Iterable, Self, Union
+import enum
+from typing import Iterable, Union
 
 import arrow
 
 
-class BookMetadata(abc.ABC):
-    """
-    Represents the metadata for the book
-    """
+class LoadStates(enum.IntEnum):
+    EMPTY = enum.auto()
+    LOADING = enum.auto()
+    LOADED = enum.auto()
 
-    source_url: str = None
-    """URL from which this metadata was fetched"""
 
-    slug: str = None
-    """Short text part of the URL for this book"""
+class BookModel(abc.ABC):
+    """Represents the basic model for a book item"""
 
-    title: str = None
-    """Book title"""
+    source_url: str
+    """URL from which this data was fetched"""
 
-    languages: Iterable[str] = None
-    """Book language(s) as Dublin-core language codes"""
-
-    cover_url: str = None
-    """URL for the cover image"""
-
-    date: arrow.Arrow = None
-    """Publication date for the book"""
-
-    description: str = None
-    """Description or synopsis of the book"""
-
-    author: str = None
-    """Book author(s)"""
-
-    publisher: str = None
-    """Book publisher"""
-
-    identifier: str = None
-    """Unique identifier for this book (e.g. UUID, hosting site book ID, ISBN, etc.)"""
-
-    genres: Iterable[str] = None
-    """Series of tags relating to the book genre"""
-
-    tags: Iterable[str] = None
-    """Series of tags describing the book content"""
-
-    rights: str = None
-    """Rights reservation for copyright purpose"""
-
-    is_loaded: bool = False
-    """Whether the metadata for this object has been loaded"""
+    load_state: LoadStates = LoadStates.EMPTY
+    """Whether the data in this object has been loaded"""
 
     def load(self) -> None:
         """
         Load the metadata for this object
         """
 
+    def __getattr__(self, name):
+        if self.load_state == LoadStates.EMPTY:
+            self.load()
+        if self.load_state == LoadStates.LOADING:
+            raise AttributeError(obj=self, name=name)
+        return getattr(self, name)
 
-class Chapter(abc.ABC):
+
+class BookMetadata(BookModel):
+    """
+    Represents the metadata for the book
+    """
+
+    slug: str
+    """Short text part of the URL for this book"""
+
+    title: str
+    """Book title"""
+
+    languages: Iterable[str]
+    """Book language(s) as Dublin-core language codes"""
+
+    cover_url: str
+    """URL for the cover image"""
+
+    date: arrow.Arrow
+    """Publication date for the book"""
+
+    description: str
+    """Description or synopsis of the book"""
+
+    author: str
+    """Book author(s)"""
+
+    publisher: str
+    """Book publisher"""
+
+    identifier: str
+    """Unique identifier for this book (e.g. UUID, hosting site book ID, ISBN, etc.)"""
+
+    genres: Iterable[str]
+    """Series of tags relating to the book genre"""
+
+    tags: Iterable[str]
+    """Series of tags describing the book content"""
+
+    rights: str
+    """Rights reservation for copyright purpose"""
+
+
+class Chapter(BookModel):
     """
     Representation of a book chapter
     """
 
-    parent: "Book" = None
+    parent: "Book"
     """Book owning this chapter"""
 
-    source_url: str = None
-    """URL for this chapter"""
-
-    index: int = None
+    index: int
     """Unique identifier for this chapter (e.g. chapter number, hosting site chapter ID, etc.)"""
 
-    title: str = None
+    title: str
     """Chapter title without number"""
 
-    languages: Iterable[str] = None
+    languages: Iterable[str]
     """Any language(s) in the chapter as Dublin-core language codes"""
 
-    text: str = None
+    text: str
     """HTML content of chapter"""
 
-    date: arrow.Arrow = None
+    date: arrow.Arrow
     """Publication date for the chapter"""
 
-    assets: dict[str, bytes] = None
+    assets: dict[str, bytes]
     """Any image assets to embed into the chapter"""
 
-    is_loaded: bool = False
-    """Whether the metadata for this object has been loaded"""
 
-    def load(self) -> Self:
-        """
-        Load the metadata for this object
-
-        Returns:
-            Self: This object containing all loaded data
-        """
-
-
-class Book(abc.ABC):
+class Book(BookModel):
     """
     Representation of a book
     """
-
-    source_url: str = None
-    """URL from which this book was fetched"""
 
     metadata: BookMetadata = None
     """Metadata for the book"""
@@ -131,9 +132,6 @@ class Book(abc.ABC):
     assets: dict[str, dict[str, Union[str, bytes]]] = None
     """Combined set of image assets from all chapters to embed into the ePub"""
 
-    is_loaded: bool = False
-    """Whether the metadata for this object has been loaded"""
-
     @classmethod
     def can_handle_url(cls, url: str) -> bool:
         """
@@ -145,11 +143,6 @@ class Book(abc.ABC):
 
         Returns:
             bool: Whether this class can handle the URL
-        """
-
-    def load(self) -> None:
-        """
-        Load the metadata for this object
         """
 
     def save(self, out_path: str) -> None:

@@ -23,7 +23,7 @@ from bs4 import BeautifulSoup
 from ebooklib import epub
 
 from . import models
-from .http import session
+from .http import HTTPError, session
 
 log = logging.getLogger(__name__)
 
@@ -41,55 +41,55 @@ class ScribbleHubBookMetadata(models.BookMetadata):
     Implementation of book metadata for Scribble Hub works
     """
 
-    source_url: str = None
+    source_url: str
     """
     Canonical series URL for the work,
         `https://www.scribblehub.com/series/{{story_id}}/{{slug}}/`
     """
 
-    slug: str = None
+    slug: str
     """Short text part of the URL for this book, broken out of the series URL `story_id`"""
 
-    title: str = None
+    title: str
     """Book title, loaded from `og:title`"""
 
-    languages: list[str] = []
+    languages: list[str]
     """Book language(s) as Dublin-core language codes, loaded from `lang="*"`"""
 
-    cover_url: str = None
+    cover_url: str
     """URL for the cover image, loaded from `og:image`"""
 
-    date: arrow.Arrow = None
+    date: arrow.Arrow
     """Last updated date from series page, parsed from `<span title="Last updated: .*">`"""
 
-    intro: str = None
+    intro: str
     """Description of the book with HTML markup, loaded from `wi_fic_desc`"""
 
-    description: str = None
+    description: str
     """Plaintext description of the book, loaded from `wi_fic_desc`"""
 
-    author: str = None
+    author: str
     """Book author(s), loaded from `twitter:creator`"""
 
-    publisher: str = "Scribble Hub"
+    publisher: str
     """Scribble Hub by default, loaded from `og:site_name`"""
 
-    identifier: str = None
+    identifier: str
     """Unique identifier for this book, broken out of the series URL `slug`"""
 
-    genres: list[str] = None
+    genres: list[str]
     """Series of tags relating to the book genre, loaded from `fic_genre`"""
 
-    tags: list[str] = None
+    tags: list[str]
     """Series of tags describing the book content, loaded from `stag`"""
 
-    rights: str = None
+    rights: str
     """
     Rights reservation for copyright purpose,
         parsed out of `<div class="sb_content copyright">...<img class="copy*">`
     """
 
-    chapters: int = 0
+    chapters: int
     """Number of chapters, loaded from `cnt_toc`"""
 
     def __init__(self, url: str) -> None:
@@ -118,15 +118,18 @@ class ScribbleHubBookMetadata(models.BookMetadata):
         url_parts = STORY_MATCH.search(self.source_url)
         self.slug = url_parts["slug"]
         self.identifier = url_parts["story_id"]
+        self.chapters = []
+        self.languages = []
+        self.genres = []
+        self.tags = []
         log.debug(f"Metadata ready for {self.slug} ({self.identifier})")
 
     def load(self) -> None:
         """
         Load the metadata for this object
         """
+        self.load_state = models.LoadStates.LOADING
         html = session.get(self.source_url, headers=headers)
-        if not html.ok:
-            html.raise_for_status()
         soup = BeautifulSoup(html.text, "lxml")
         for tag in soup.find_all(lambda x: x.has_attr("lang")):
             log.debug(f'Found language {tag["lang"]}')
@@ -155,7 +158,7 @@ class ScribbleHubBookMetadata(models.BookMetadata):
             if "copy" not in img["class"]:
                 continue
             self.rights = ftfy.fix_text(img.next.string)
-        self.is_loaded = True
+        self.load_state = models.LoadStates.LOADED
 
 
 class ScribbleHubChapter(models.Chapter):
@@ -163,37 +166,37 @@ class ScribbleHubChapter(models.Chapter):
     Implementation of a book chapter for Scribble Hub works
     """
 
-    parent: "ScribbleHubBook" = None
+    parent: "ScribbleHubBook"
     """Book owning this chapter"""
 
-    source_url: str = None
+    source_url: str
     """
     URL for this chapter,
         `https://www.scribblehub.com/read/{{story_id}}-{{slug}}/chapter/{{chapter_id}}/`
     """
 
-    index: int = None
+    index: int
     """
     Unique identifier for this chapter,
         loaded in parent from series TOC `<li class="toc_w" order="{{index}}">`
     """
 
-    title: str = None
+    title: str
     """Chapter title, loaded from `chapter-title`"""
 
-    languages: list[str] = []
+    languages: list[str]
     """Any language(s) in the chapter  as Dublin-core language codes, loaded from `lang="*"`"""
 
-    text: str = None
+    text: str
     """HTML content of chapter, loaded from `chp_raw`"""
 
-    date: arrow.Arrow = None
+    date: arrow.Arrow
     """
     Publication date for the chapter,
         loaded in parent from series TOC `<li class="toc_w" title="{{date}}">`
     """
 
-    assets: dict[str, bytes] = None
+    assets: dict[str, bytes]
     """
     Any image assets to embed into the chapter, loaded from `#chp_contents img[src]`
 
@@ -218,6 +221,7 @@ class ScribbleHubChapter(models.Chapter):
         self.parent = parent
         self.source_url = url
         self.assets = {}
+        self.languages = []
 
     def load(self) -> Self:
         """
@@ -230,9 +234,8 @@ class ScribbleHubChapter(models.Chapter):
         # since those come from the series TOC not the chapter page metadata
         assert self.date is not None
         assert self.index is not None
+        self.load_state = models.LoadStates.LOADING
         resp = session.get(self.source_url, headers=headers)
-        if not resp.ok:
-            resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "lxml")
         for tag in soup.find_all(lambda x: x.has_attr("lang")):
             log.debug(f'Found language {tag["lang"]}')
@@ -246,11 +249,12 @@ class ScribbleHubChapter(models.Chapter):
         for asset in soup.select("#chp_contents img[src]"):
             if asset["src"] not in self.assets:
                 log.debug(f'Found asset at {asset["src"]}')
-                asset_resp = session.get(asset["src"], headers=headers)
-                if not asset_resp.ok:
+                try:
+                    asset_resp = session.get(asset["src"], headers=headers)
+                except HTTPError as e:
                     # just remove the asset from HTML if we have fetch issues
                     log.warning(
-                        f'Issue fetching asset {asset["src"]} because "{asset_resp.status_code}: {asset_resp.reason}"'
+                        f'Issue fetching asset {asset["src"]} because "{e.response.status_code}: {e.response.reason}"'
                     )
                     asset.extract()
                     continue
@@ -275,15 +279,13 @@ class ScribbleHubChapter(models.Chapter):
         chap_text = soup.find(class_="chp_raw").extract()
         chap_text.insert(0, header_tag)
         self.text = ftfy.fix_text(chap_text.prettify())
-        self.is_loaded = True
+        self.load_state = models.LoadStates.LOADED
         self.fix_footnotes()
 
     def fix_footnotes(self):
         """
         Iterate through any footnotes and refactor them to ePub format
         """
-        if not self.is_loaded:
-            return
         soup = BeautifulSoup(self.text, "lxml")
         footnotes = []
         for tag in soup.select(".modern-footnotes-footnote"):
@@ -323,16 +325,16 @@ class ScribbleHubBook(models.Book):
     Implementation of a book for Scribble Hub works
     """
 
-    source_url: str = None
+    source_url: str
     """URL from which this book was fetched"""
 
-    metadata: ScribbleHubBookMetadata = None
+    metadata: ScribbleHubBookMetadata
     """Metadata for the book"""
 
-    cover_image: bytes = None
+    cover_image: bytes
     """The image fetched from `self.metadata.cover_url`"""
 
-    chapters: list[ScribbleHubChapter] = []
+    chapters: list[ScribbleHubChapter]
     """Series of chapters in the book"""
 
     styles = (
@@ -342,10 +344,10 @@ class ScribbleHubBook(models.Book):
     )
     """Combined CSS stylesheet for the ePub"""
 
-    filename: str = None
+    filename: str
     """Filename to save the book, composed of `{{metadata.author}} - {{metadata.title}}.epub`"""
 
-    assets: dict[str, dict[str, Union[str, bytes]]] = None
+    assets: dict[str, dict[str, Union[str, bytes]]]
     """
     Combined set of image assets from all chapters to embed into the ePub
     
@@ -394,6 +396,7 @@ class ScribbleHubBook(models.Book):
         """
         Load the metadata for this object
         """
+        self.load_state = models.LoadStates.LOADING
         log.debug(f"Loading book for {self.source_url}")
 
         # fill out the metadata first from the series page
@@ -402,12 +405,11 @@ class ScribbleHubBook(models.Book):
 
         # get the cover image downloaded
         img_resp = session.get(self.metadata.cover_url)
-        if not img_resp.ok:
-            img_resp.raise_for_status()
         self.cover_image = img_resp.content
 
         # fill out the chapters
         self.get_chapters()
+        self.load_state = models.LoadStates.LOADED
 
     def save(self, out_path: str):
         """
@@ -514,7 +516,6 @@ class ScribbleHubBook(models.Book):
         """
         Fetch the chapters for the work, based on the TOC API
         """
-        self.chapters = []
         page_count = math.ceil(self.metadata.chapters / 15)
         log.debug(
             f"Expecting {self.metadata.chapters} chapters, page_count={page_count}"
@@ -529,8 +530,6 @@ class ScribbleHubBook(models.Book):
                 },
                 headers=headers,
             )
-            if not chapter_resp.ok:
-                chapter_resp.raise_for_status()
             chapter_soup = BeautifulSoup(chapter_resp.text, "lxml")
             for chapter_tag in chapter_soup.find_all(class_="toc_w"):
                 chapter = ScribbleHubChapter(self, chapter_tag.a["href"])
