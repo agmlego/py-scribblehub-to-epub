@@ -96,9 +96,6 @@ class Chapter(BookModel):
     title: str
     """Chapter title without number"""
 
-    languages: Iterable[str]
-    """Any language(s) in the chapter as Dublin-core language codes"""
-
     text: str
     """HTML content of chapter"""
 

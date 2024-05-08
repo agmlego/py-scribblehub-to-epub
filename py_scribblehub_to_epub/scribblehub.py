@@ -184,9 +184,6 @@ class ScribbleHubChapter(models.Chapter):
     title: str
     """Chapter title, loaded from `chapter-title`"""
 
-    languages: list[str]
-    """Any language(s) in the chapter  as Dublin-core language codes, loaded from `lang="*"`"""
-
     text: str
     """HTML content of chapter, loaded from `chp_raw`"""
 
@@ -221,7 +218,6 @@ class ScribbleHubChapter(models.Chapter):
         self.parent = parent
         self.source_url = url
         self.assets = {}
-        self.languages = []
 
     def load(self) -> Self:
         """
@@ -238,8 +234,9 @@ class ScribbleHubChapter(models.Chapter):
         resp = session.get(self.source_url, headers=headers)
         soup = BeautifulSoup(resp.text, "lxml")
         for tag in soup.find_all(lambda x: x.has_attr("lang")):
-            log.debug(f'Found language {tag["lang"]}')
-            self.languages.append(tag["lang"])
+            if tag["lang"] not in self.parent.metadata.languages:
+                log.debug(f'Found language {tag["lang"]}')
+                self.parent.metadata.languages.append(tag["lang"])
         self.title = soup.find(class_="chapter-title").text
         log.info(f"{self.parent.metadata.title} Chapter {self.index}: {self.title}")
 
@@ -539,7 +536,6 @@ class ScribbleHubBook(models.Book):
                     chapter_tag.span["title"], "MMM D, YYYY hh:mm A"
                 )
                 self.chapters.append(chapter)
-                self.metadata.languages.extend(chapter.languages)
 
         self.chapters.sort(key=lambda x: x.index)
         for chapter in self.chapters:
