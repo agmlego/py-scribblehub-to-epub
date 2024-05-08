@@ -25,6 +25,7 @@ logging.basicConfig(
 )
 logging.getLogger("requests_cache").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
+logging.getLogger("pyrate_limiter").setLevel(logging.WARNING)
 log = logging.getLogger(__name__)
 
 
