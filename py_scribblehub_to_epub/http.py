@@ -1,6 +1,7 @@
 # pylint: disable=logging-fstring-interpolation
 import logging
 from os.path import join
+from time import sleep
 
 from appdirs import AppDirs
 from pyrate_limiter import SQLiteBucket
@@ -23,10 +24,11 @@ class CachedLimiterSession(CacheMixin, LimiterMixin, Session):
     """
 
     def request(self, *args, **kwargs):
-        for _ in range(RETRY_COUNT):
+        for retry in range(RETRY_COUNT):
             response = super().request(*args, **kwargs)
             if response.ok or response.status_code not in limit_statuses:
                 break
+            sleep(retry)
         if response.status_code in limit_statuses:
             log.warning(f"So many retries! ({RETRY_COUNT})")
         response.raise_for_status()
