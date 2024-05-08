@@ -3,11 +3,13 @@
 import logging
 import sys
 import tomllib
+from multiprocessing import Pool
 from typing import Iterable, Union
 
 import click
 from rich.logging import RichHandler
 
+from .. import models
 from ..scribblehub import ScribbleHubBook
 
 providers = [
@@ -65,10 +67,10 @@ def cli(url: str, out_path: click.Path, config: click.Path):
         else:
             log.error("Config file must contain books.urls or URL must exist in args")
             sys.exit(-300)
-    make_epub(url=url, out_path=out_path)
+    make_epubs(url=url, out_path=out_path)
 
 
-def make_epub(url: Union[str, Iterable[str]], out_path: str):
+def make_epubs(url: Union[str, Iterable[str]], out_path: str):
     """
     Make an epub book
 
@@ -84,7 +86,10 @@ def make_epub(url: Union[str, Iterable[str]], out_path: str):
             if provider.can_handle_url(u):
                 log.info(f"{provider} can handle {u}")
                 tasks.append(provider(u))
+    with Pool() as pool:
+        pool.starmap(func=_make_epub, iterable=zip(tasks, (out_path,) * len(tasks)))
 
-    for task in tasks:
-        task.load()
-        task.save(out_path)
+
+def _make_epub(task: models.Book, out_path: str) -> None:
+    task.load()
+    task.save(out_path=out_path)
